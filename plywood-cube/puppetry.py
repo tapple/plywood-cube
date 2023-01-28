@@ -414,20 +414,24 @@ class VIEW3D_OT_puppetry_transmit_toggle(bpy.types.Operator):
     
     def match(self, prop):
         if not (self.target == "*" or prop.name == self.target):
+            # print(f"prop.name {prop.name!r} did not match {self.target!r}")
             return False
         
         if self.group != "":
             if prop.group != self.group:
+                # print(f"prop.group {prop.group!r} did not match {self.group!r}")
                 return False
         
         return True
     
     def execute(self, context):
+        # print(f"TransmitToggle property: {self.property!r}, target: {self.target!r}, group: {self.group!r}, value: {self.value!r}")
         layout = self.layout
         scene = context.scene
         props = scene.puppetry
         for p in props.Transmit:
             if self.match(p):
+                # print(f"matched: {p.name}")
                 if self.value == -1:
                     setattr(p, self.property, not getattr(p, self.property))
                 else:
@@ -448,10 +452,12 @@ class VIEW3D_UL_puppetry_transmit(bpy.types.UIList):
                                   emboss=False)
             btn.target = item.name
             btn.property = "position"
+            btn.value = -1
             btn = split2.operator("puppetry.transmittoggle", icon="ORIENTATION_GIMBAL" if item.rotation else "DOT",
                                   emboss=False)
             btn.target = item.name
             btn.property = "rotation"
+            btn.value = -1
     
     def draw_filter(self, context, layout):
         scene = context.scene
@@ -497,6 +503,7 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "position"
+        btn.group = ""
         btn.value = 1
         
         btn = row.operator("puppetry.transmittoggle", text="Group")
@@ -514,6 +521,7 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "position"
+        btn.group = ""
         btn.value = 0
         
         btn = row.operator("puppetry.transmittoggle", text="Group")
@@ -531,6 +539,7 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "rotation"
+        btn.group = ""
         btn.value = 1
         
         btn = row.operator("puppetry.transmittoggle", text="Group")
@@ -547,6 +556,7 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "rotation"
+        btn.group = ""
         btn.value = 0
         
         btn = row.operator("puppetry.transmittoggle", text="Group")
