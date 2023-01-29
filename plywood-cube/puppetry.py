@@ -17,7 +17,7 @@ Global = {}
 
 PLYWOOD_CUBE_PUMP = uuid.UUID('acc4ce6d-f50d-417e-b7c6-cc5d6a6b850b')
 BONE_PATH_PATTERN = re.compile(
-    r'pose\.bone\["(.*)"\]\.(rotation|location|scale)(_quaternion|_euler|_axis_angle)?')
+    r'pose\.bones\["(.*)"\]\.(rotation|location|scale)(_quaternion|_euler|_axis_angle)?')
 
 
 class PuppetrySession:
@@ -33,17 +33,17 @@ class PuppetrySession:
         self.lastUpdate = 0
         bpy.app.timers.register(self.timer)
         bpy.app.timers.register(self.animate)
-
+    
     def setProps(self, props):
         self.props = props
-
+    
     def connect(self, host, port):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(1)
         self.sock.connect((host, port))
         self.sock.settimeout(0.1)
         self.connected = True
-
+    
     def send(self, pump, data):
         if self.connected == False:
             return
@@ -53,7 +53,7 @@ class PuppetrySession:
         data = str(len(data)).encode() + b":" + data
         print(data)
         return self.sock.sendall(data)
-
+    
     def handleData(self, data):
         data = llbase.llsd.parse_notation(data)
         if not self.pump:
@@ -65,7 +65,7 @@ class PuppetrySession:
                 "source": "puppetry.controller",
                 "listener": PLYWOOD_CUBE_PUMP
             })
-
+            
             # Connect the pump
             self.send(self.pump["data"]["command"], {
                 "op": "listen",
@@ -74,18 +74,18 @@ class PuppetrySession:
                 "listener": PLYWOOD_CUBE_PUMP,
                 "dest": "blender.plywood-cube.pupptry.controller"
             })
-
+            
             self.send("puppetry", {
                 "command": "set"
             })
         print(data)
         if data["pump"] == "puppetry.controller":
             pass
-
+    
     def recv(self, size):
         self.sock.settimeout(0)
         return self.sock.recv(size)
-
+    
     def animate(self):
         if self.shouldClose:
             return None
@@ -95,55 +95,55 @@ class PuppetrySession:
             return 1
         if self.props.Target not in bpy.data.objects:
             return 1
-
+        
         arm = bpy.data.objects[self.props.Target]
         orient = self.props.ArmatureOrientationMatrix
         orientI = orient.inverted()
-
+        
         updates = {}
         shouldUpdate = False
         for bn in arm.data.bones.keys():
             if bn not in self.props.Transmit:
                 continue
-
+            
             if not (self.props.Transmit[bn].position
                     or self.props.Transmit[bn].rotation):
                 continue
-
+            
             db = arm.data.bones[bn]
             pb = arm.pose.bones[bn]
-
+            
             mat = pb.matrix_channel
             if pb.parent:
                 mat = pb.parent.matrix_channel.inverted() @ mat
             mat = orientI @ mat @ orient
-
+            
             r = mat.to_3x3().to_quaternion()
-
+            
             r.normalize()
-
+            
             if r.w < 0:
                 r = r.inverted()
-
+            
             loc, rot, scale = mat.decompose()
-
+            
             if bn not in updates:
                 updates[bn] = {}
-
+            
             if self.props.Transmit[bn].rotation:
                 updates[bn]["r"] = [
                     r.x,
                     r.y,
                     r.z,
                 ]
-
+            
             if self.props.Transmit[bn].position:
                 updates[bn]["p"] = [
                     loc.x,
                     loc.y,
                     loc.z,
                 ]
-
+            
             if bn not in self.last:
                 shouldUpdate = True
             else:
@@ -152,11 +152,11 @@ class PuppetrySession:
                         shouldUpdate = True
                     elif self.last[bn][check] != updates[bn][check]:
                         shouldUpdate = True
-
+                
                 for check in self.last[bn].keys():
                     if check not in updates[bn]:
                         shouldUpdate = True
-
+        
         now = time.time()
         if shouldUpdate or now > self.lastUpdate + 0.5:
             self.last = updates
@@ -170,7 +170,7 @@ class PuppetrySession:
                 }
             })
         return self.props.UpdateTime
-
+    
     def timer(self):
         if self.shouldClose:
             return 0
@@ -190,7 +190,7 @@ class PuppetrySession:
                     else:
                         self.buffer += c
                     continue
-
+                
                 self.buffer += c
                 if len(self.buffer) == self.length:
                     self.handleData(self.buffer)
@@ -203,50 +203,13 @@ class PuppetrySession:
             else:
                 raise e
         return 0.01
-
-    def setTargetListFromAction(self):
-        try:
-            arm = bpy.data.objects[self.props.Target]
-        except KeyError:
-            return
-        action = arm.animation_data.action
-        if action is None:
-            return
-
-        for p in self.props.Transmit:
-            p.position = False
-            p.rotation = False
-            # p.scale = False
-
-        for fcurve in action.fcurves:
-            if fcurve.mute:
-                continue
-            match = BONE_PATH_PATTERN.match(fcurve.datapath)
-            if match is None:
-                continue
-            bone_name, field, _ = match.groups()
-            if bone_name == "COG": # convenience for Avastar rigs
-                bone_name = 'mPelvis'
-            try:
-                transmit = self.props.Transmit[bone_name]
-            except KeyError:
-                try:  # convenience for Avastar rigs
-                    transmit = self.props.Transmit["m" + bone_name]
-                except KeyError:
-                    continue
-            if field == "position":
-                transmit.position = True
-            elif field == "rotation":
-                transmit.rotation = True
-            # elif field == "scale":
-            #     transmit.scale = True
-
+    
     def disconnect(self):
         self.connected = False
         if self.sock:
             self.sock.close()
         self.sock = None
-
+    
     def close(self):
         self.shouldClose = True
         self.disconnect()
@@ -271,7 +234,7 @@ class VIEW3D_OT_puppetry_connect(bpy.types.Operator):
     bl_idname = "puppetry.connect"
     bl_label = 'Connect to puppetry server'
     bl_options = {'REGISTER'}
-
+    
     def execute(self, context):
         Session = Global["Session"]
         layout = self.layout
@@ -294,34 +257,34 @@ class PuppetryProperties(bpy.types.PropertyGroup):
         default="127.0.0.1",
         maxlen=1024,
     )
-
+    
     Port: bpy.props.IntProperty(
         name="Port",
         default=5000,
         min=1024,
         max=65535
     )
-
+    
     Armatures: bpy.props.CollectionProperty(type=StringArrayProperty)
     ArmatureOrientation: bpy.props.EnumProperty(name="Orientation", items=(
         ("SL", "SL (+X forward)", "Bone orientations are exported to SL without transformation", 0),
         ("Blender", "Blender (-Y forward)", "Rotate bone orientations 90 degrees left before export", 1),
     ))
-
+    
     Target: bpy.props.StringProperty(name="Target")
-
+    
     Transmit: bpy.props.CollectionProperty(type=PuppetryTransmitList)
     Transmit_index: bpy.props.IntProperty()
     TransmitGroups: bpy.props.CollectionProperty(type=StringArrayProperty)
     TransmitGroupEnum: bpy.props.EnumProperty(items=add_items_from_collection_callback)
-
+    
     UpdateTime: bpy.props.FloatProperty(
         name="Update rate",
         default=0.1,
         min=0.05,
         max=5
     )
-
+    
     @property
     def ArmatureOrientationMatrix(self):
         if self.ArmatureOrientation == "Blender":
@@ -338,15 +301,15 @@ class VIEW3D_PT_puppetry_connect(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Puppetry'
     bl_label = "Connection"
-
+    
     def draw(self, context):
         Session = Global["Session"]
         layout = self.layout
         scene = context.scene
         props = scene.puppetry
-
+        
         Session.setProps(props)
-
+        
         layout.prop(props, "Host")
         layout.prop(props, "Port")
         layout.separator()
@@ -365,14 +328,14 @@ def findArmatures(self):
 def findArmaturesReal():
     context = bpy.context
     props = bpy.context.scene.puppetry
-
+    
     props.Armatures.clear()
-
+    
     for o in bpy.data.objects:
         if o.type == 'ARMATURE':
             armature = props.Armatures.add()
             armature.name = o.name
-
+    
     if len(props.Armatures) == 1 and props.Target == "":
         props.Target = props.Armatures[0].name
 
@@ -380,12 +343,12 @@ def findArmaturesReal():
 class VIEW3D_OT_puppetry_skeleton_action(bpy.types.Operator):
     bl_idname = 'puppetry.skeletonedit'
     bl_label = ''
-
+    
     action: bpy.props.IntProperty(
         name='action',
         default=-1
     )
-
+    
     def execute(self, context):
         Session = Global["Session"]
         layout = self.layout
@@ -408,15 +371,15 @@ class VIEW3D_PT_puppetry_armature(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Puppetry'
     bl_label = "Armature"
-
+    
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         props = scene.puppetry
-
+        
         layout.prop_search(props, "Target", props, "Armatures", text="", icon="ARMATURE_DATA")
         layout.prop(props, "ArmatureOrientation")
-
+        
         layout.separator()
         layout.prop(props, "UpdateTime")
         row = layout.row()
@@ -434,36 +397,36 @@ class VIEW3D_PT_puppetry_armature(bpy.types.Panel):
 class VIEW3D_OT_puppetry_transmit_toggle(bpy.types.Operator):
     bl_idname = 'puppetry.transmittoggle'
     bl_label = ''
-
+    
     target: bpy.props.StringProperty(
         name='target'
     )
-
+    
     property: bpy.props.StringProperty(
         name='property'
     )
-
+    
     group: bpy.props.StringProperty(
         name='group'
     )
-
+    
     value: bpy.props.IntProperty(
         name='value',
         default=-1
     )
-
+    
     def match(self, prop):
         if not (self.target == "*" or prop.name == self.target):
             # print(f"prop.name {prop.name!r} did not match {self.target!r}")
             return False
-
+        
         if self.group != "":
             if prop.group != self.group:
                 # print(f"prop.group {prop.group!r} did not match {self.group!r}")
                 return False
-
+        
         return True
-
+    
     def execute(self, context):
         # print(f"TransmitToggle property: {self.property!r}, target: {self.target!r}, group: {self.group!r}, value: {self.value!r}")
         layout = self.layout
@@ -479,15 +442,62 @@ class VIEW3D_OT_puppetry_transmit_toggle(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class VIEW3D_OT_puppetry_transmit_from_action(bpy.types.Operator):
+    bl_idname = 'puppetry.transmit_from_action'
+    bl_label = 'Rebuild the transmit list from the active action'
+    
+    def execute(self, context):
+        props = context.scene.puppetry
+        try:
+            arm = bpy.data.objects[props.Target]
+        except KeyError:
+            return
+        action = arm.animation_data.action
+        if action is None:
+            return
+        
+        for p in props.Transmit:
+            p.position = False
+            p.rotation = False
+            # p.scale = False
+        
+        for fcurve in action.fcurves:
+            if fcurve.mute:
+                continue
+            print(f"data_path: {fcurve.data_path}")
+            match = BONE_PATH_PATTERN.match(fcurve.data_path)
+            if match is None:
+                continue
+            bone_name, field, _ = match.groups()
+            if bone_name == "COG":  # convenience for Avastar rigs
+                bone_name = 'mPelvis'
+            print(f"bone_name: {bone_name}; field: {field}")
+            try:
+                transmit = props.Transmit[bone_name]
+            except KeyError:
+                try:  # convenience for Avastar rigs
+                    transmit = props.Transmit["m" + bone_name]
+                except KeyError:
+                    continue
+            print(f"transmit: {transmit}")
+            if field == "location":
+                transmit.position = True
+            elif field == "rotation":
+                transmit.rotation = True
+            # elif field == "scale":
+            #     transmit.scale = True
+        return {'FINISHED'}
+
+
 class VIEW3D_UL_puppetry_transmit(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             split = layout.row()
             split.label(text=item.name)
-
+            
             split2 = layout.row()
             split2.alignment = "RIGHT"
-
+            
             btn = split2.operator("puppetry.transmittoggle", icon="OBJECT_ORIGIN" if item.position else "DOT",
                                   emboss=False)
             btn.target = item.name
@@ -498,14 +508,13 @@ class VIEW3D_UL_puppetry_transmit(bpy.types.UIList):
             btn.target = item.name
             btn.property = "rotation"
             btn.value = -1
-
-
+    
     def draw_filter(self, context, layout):
         scene = context.scene
         props = scene.puppetry
         row = layout.row()
         row.prop(props, "TransmitGroupEnum", text="")
-
+    
     def filter_items(self, context, data, propname):
         filtered = []
         ordered = []
@@ -523,12 +532,12 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Puppetry'
     bl_label = "Transmit List"
-
+    
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         props = scene.puppetry
-
+        
         row = layout.row()
         row.template_list(
             "VIEW3D_UL_puppetry_transmit", "custom_def_list",
@@ -536,61 +545,62 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
             props, "Transmit_index",
             rows=2
         )
-
+        btn = layout.operator("puppetry.transmit_from_action", text="Rebuild from action")
+        
         row = layout.row()
         row.label(text="Enable:", icon="OBJECT_ORIGIN")
-
+        
         row = layout.row(align=True)
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "position"
         btn.group = ""
         btn.value = 1
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Group")
         btn.target = "*"
         btn.property = "position"
         btn.group = props.TransmitGroupEnum
         btn.value = 1
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Selected")
-
+        
         row = layout.row()
         row.label(text="Disable:", icon="OBJECT_ORIGIN")
-
+        
         row = layout.row(align=True)
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "position"
         btn.group = ""
         btn.value = 0
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Group")
         btn.target = "*"
         btn.property = "position"
         btn.group = props.TransmitGroupEnum
         btn.value = 0
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Selected")
-
+        
         row = layout.row()
         row.label(text="Enable:", icon="ORIENTATION_GIMBAL")
-
+        
         row = layout.row(align=True)
         btn = row.operator("puppetry.transmittoggle", text="All")
         btn.target = "*"
         btn.property = "rotation"
         btn.group = ""
         btn.value = 1
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Group")
         btn.target = "*"
         btn.property = "rotation"
         btn.group = props.TransmitGroupEnum
         btn.value = 1
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Selected")
-
+        
         row = layout.row()
         row.label(text="Disable:", icon="ORIENTATION_GIMBAL")
         row = layout.row(align=True)
@@ -599,13 +609,13 @@ class VIEW3D_PT_puppetry_transmit(bpy.types.Panel):
         btn.property = "rotation"
         btn.group = ""
         btn.value = 0
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Group")
         btn.target = "*"
         btn.property = "rotation"
         btn.group = props.TransmitGroupEnum
         btn.value = 0
-
+        
         btn = row.operator("puppetry.transmittoggle", text="Selected")
 
 
@@ -614,7 +624,7 @@ def populateBoneList():
     groups = bpy.context.scene.puppetry.TransmitGroups
     transmit.clear()
     groups.clear()
-
+    
     bones = sl_skeleton.get_skeleton()
     addedGroups = []
     for bone in bones:
@@ -631,6 +641,7 @@ def populateBoneList():
 
 module_classes = (
     VIEW3D_OT_puppetry_transmit_toggle,
+    VIEW3D_OT_puppetry_transmit_from_action,
     StringArrayProperty,
     PuppetryTransmitList,
     PuppetryProperties,
@@ -646,9 +657,9 @@ module_classes = (
 def register():
     for cls in module_classes:
         bpy.utils.register_class(cls)
-
+    
     bpy.types.Scene.puppetry = bpy.props.PointerProperty(type=PuppetryProperties)
-
+    
     Global["Session"] = PuppetrySession()
     bpy.app.handlers.depsgraph_update_post.append(findArmatures)
     bpy.app.timers.register(lambda: findArmaturesReal() or 1)
@@ -657,12 +668,12 @@ def register():
 
 def unregister():
     Session = Global["Session"]
-
+    
     del bpy.types.Scene.puppetry
     bpy.app.handlers.depsgraph_update_post.remove(findArmatures)
-
+    
     for cls in reversed(module_classes):
         bpy.utils.unregister_class(cls)
-
+    
     Session.close()
     del Global["Session"]
