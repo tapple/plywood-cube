@@ -464,14 +464,14 @@ class VIEW3D_OT_puppetry_transmit_from_action(bpy.types.Operator):
         for fcurve in action.fcurves:
             if fcurve.mute:
                 continue
-            print(f"data_path: {fcurve.data_path}")
+            # print(f"data_path: {fcurve.data_path}")
             match = BONE_PATH_PATTERN.match(fcurve.data_path)
             if match is None:
                 continue
             bone_name, field, _ = match.groups()
             if bone_name == "COG":  # convenience for Avastar rigs
                 bone_name = 'mPelvis'
-            print(f"bone_name: {bone_name}; field: {field}")
+            # print(f"bone_name: {bone_name}; field: {field}")
             try:
                 transmit = props.Transmit[bone_name]
             except KeyError:
@@ -479,7 +479,7 @@ class VIEW3D_OT_puppetry_transmit_from_action(bpy.types.Operator):
                     transmit = props.Transmit["m" + bone_name]
                 except KeyError:
                     continue
-            print(f"transmit: {transmit}")
+            # print(f"transmit: {transmit}")
             if field == "location":
                 transmit.position = True
             elif field == "rotation":
