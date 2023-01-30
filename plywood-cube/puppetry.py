@@ -112,18 +112,18 @@ class PuppetrySession:
             
             db = arm.data.bones[bn]
             pb = arm.pose.bones[bn]
+            # pb.matrix_channel = pb.matrix @ db.matrix_local.inverted()  (always)
+            # pb.matrix = db.matrix_local @ pb.matrix_basis  (without constraints)
             
             mat = pb.matrix_channel
-            if pb.parent:
+            offset = Matrix.Translation(db.head_local)
+            if pb.parent and pb.name != "mPelvis" and pb.name != "Avatar Center":
                 mat = pb.parent.matrix_channel.inverted() @ mat
+                offsetI = Matrix.Translation(-pb.parent.bone.head_local)
+            else:
+                offsetI = offset.inverted()
+            mat = offsetI @ mat @ offset
             mat = orientI @ mat @ orient
-            
-            r = mat.to_3x3().to_quaternion()
-            
-            r.normalize()
-            
-            if r.w < 0:
-                r = r.inverted()
             
             loc, rot, scale = mat.decompose()
             
@@ -131,18 +131,13 @@ class PuppetrySession:
                 updates[bn] = {}
             
             if self.props.Transmit[bn].rotation:
-                updates[bn]["r"] = [
-                    r.x,
-                    r.y,
-                    r.z,
-                ]
+                rot.normalize()
+                if rot.w < 0:
+                    rot.invert()
+                updates[bn]["r"] = rot[1:]
             
             if self.props.Transmit[bn].position:
-                updates[bn]["p"] = [
-                    loc.x,
-                    loc.y,
-                    loc.z,
-                ]
+                updates[bn]["p"] = loc[:]
             
             if bn not in self.last:
                 shouldUpdate = True
